@@ -8,6 +8,44 @@ from PIL import Image
 import numpy as np
 from matplotlib import pyplot as plt
 import os
+from treelib import Tree, Node
+
+pos_hier = Tree()
+
+pos_hier.create_node("Any",0)
+pos_hier.create_node("Intercourse", 1,parent=0)
+pos_hier.create_node("Outercourse", 2,parent=0)
+pos_hier.create_node("Noncourse", 3, 0)
+
+pos_hier.create_node("Sex",4,parent=1)
+pos_hier.create_node("Oral",5,parent=1)
+pos_hier.create_node("Fingering", 10, parent=1)
+pos_hier.create_node("Fisting", 11, parent=1)
+
+pos_hier.create_node("Missionary", 6, parent=4)
+pos_hier.create_node("DP", 7, parent=4)
+pos_hier.create_node("Anal", 8, parent=4)
+pos_hier.create_node("Strap On", 9, parent=4)
+pos_hier.create_node("Cowgirl", 12, parent=4)
+pos_hier.create_node("Reverse Cowgirl", 13, parent=12)
+
+pos_hier.create_node("Titty Fucking",14,parent=2)
+pos_hier.create_node("Handjob",15,parent=2)
+pos_hier.create_node("Footjob",16,parent=2)
+pos_hier.create_node("Masturbating",17, parent=2)
+
+pos_hier.create_node("Smoking",18,parent=3)
+pos_hier.create_node("Pissing",19,parent=3)
+pos_hier.create_node("Squirting",20,parent=3)
+pos_hier.create_node("Oil",21,parent=3)
+pos_hier.create_node("Cumshot",22,parent=3)
+pos_hier.create_node("Creampie",23,parent=3)
+
+pos_hier.create_node("Blowjob",24,parent=5)
+pos_hier.create_node("Pussy Licking",25,parent=5)
+pos_hier.create_node("Ass Licking",26,parent=5)
+pos_hier.create_node("Ass to Mouth",27,parent=5)
+
 
 
 def to_no_seq(seq_feats, seq_labels, test_size=0.1):
