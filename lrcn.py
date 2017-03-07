@@ -2,6 +2,7 @@ import numpy as np
 import random
 from keras.models import Sequential
 from keras.layers import LSTM, Recurrent, Activation, Dropout, MaxPooling2D, Convolution2D, Dense, Flatten
+from keras.layers.recurrent import SimpleRNN
 from keras.layers.wrappers import TimeDistributed
 from keras.preprocessing.image import ImageDataGenerator, Iterator, K
 from create_input import load_sequences_with_paths
@@ -30,8 +31,8 @@ class PHImageSequenceIterator(Iterator):
     def __init__(self, directory, image_data_generator, target_size=(90, 160), color_mode='rgb',
                  classes=None, class_mode='categorical',
                  batch_size=32, shuffle=True, seed=88,
-                 seq_len=10, train=True, test_size=0.2):
-        self.seq_img_paths, self.seq_labels, instances, labels = load_sequences_with_paths(directory)
+                 seq_len=10, train=True, test_size=0.2, labels_dict=None):
+        self.seq_img_paths, self.seq_labels, instances, labels = load_sequences_with_paths(directory, labels_dict)
         idx_with_min_len = [i for i, seq in enumerate(self.seq_labels) if len(seq) >= seq_len]
 
         n_test_instances = int(test_size*len(idx_with_min_len))
@@ -83,11 +84,11 @@ class PHImageSequenceDataGenerator(object):
                             save_prefix='',
                             save_format='jpeg',
                             follow_links=False,
-                            seq_len=10, train=True
+                            seq_len=10, train=True, labels_dict=None,
                             ):
         return PHImageSequenceIterator(directory, self, target_size=target_size, color_mode=color_mode, classes=classes,
                                        class_mode=color_mode, batch_size=batch_size, shuffle=shuffle, seed=seed,
-                                       seq_len=seq_len, train=train)
+                                       seq_len=seq_len, train=train, labels_dict=labels_dict)
 
 
 class LRCN(object):
@@ -106,13 +107,13 @@ class LRCN(object):
         self.model.add(TimeDistributed(Activation('relu')))
         self.model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
         self.model.add(TimeDistributed(Dropout(0.25)))
-        #self.model.add(TimeDistributed(Convolution2D(64, 3, 3)))
-        #self.model.add(TimeDistributed(Activation('relu')))
-        #self.model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
-        #self.model.add(TimeDistributed(Dropout(0.25)))
+        self.model.add(TimeDistributed(Convolution2D(64, 3, 3)))
+        self.model.add(TimeDistributed(Activation('relu')))
+        self.model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
+        self.model.add(TimeDistributed(Dropout(0.25)))
         self.model.add(TimeDistributed(Flatten()))
 
-        self.model.add(LSTM(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
+        self.model.add(SimpleRNN(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
         self.model.add(TimeDistributed(Dense(self.n_classes, activation='softmax')))
 
         self.model.compile(loss='categorical_crossentropy',

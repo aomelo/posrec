@@ -21,15 +21,11 @@ if __name__ == '__main__':
         labels_name_dict[node.tag] = node.identifier
         inv_labels_name_dict[node.identifier] = node.tag
 
-    print(labels_name_dict)
-    print(inv_labels_name_dict)
-
     for i,label in enumerate(labels):
         node_id = labels_name_dict[label]
         node = pos_hier.get_node(node_id)
         labels_dict[node.tag].add(i)
         inv_labels_dict[i].add(node.tag)
-        print(node_id,node.tag)
         for sub_node in pos_hier.subtree(node_id).all_nodes():
             labels_dict[sub_node.tag].add(i)
             inv_labels_dict[i].add(sub_node.tag)
@@ -46,19 +42,14 @@ if __name__ == '__main__':
         labels_dict[name] = most_specific
 
 
-
-    print(labels_dict)
-    print(inv_labels_dict)
-
-
     args = parser.parse_args()
 
     # (X, Y), (X_test, Y_test) = cifar10.load_data(dirname=".")
     # print(X.shape,Y.shape,X_test.shape,Y_test.shape)
 
     data_gen = PHImageSequenceDataGenerator()
-    train_generator = data_gen.flow_from_directory(args.input,batch_size=64,train=True)
-    test_generator = data_gen.flow_from_directory(args.input,batch_size=64,train=False)
+    train_generator = data_gen.flow_from_directory(args.input,batch_size=64,train=True, labels_dict=labels_dict)
+    test_generator = data_gen.flow_from_directory(args.input,batch_size=64,train=False, labels_dict=labels_dict)
     #train_generator = PHImageSequenceDataGenerator(args.input,batch_size=128)
     n_classes = train_generator.n_labels
     batch_size = train_generator.batch_size
