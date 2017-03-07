@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from create_input import load_sequences, to_no_seq, pos_hier
-from lrcn import LRCN, PHImageSequenceDataGenerator, PHImageSequenceIterator
+from lrcn import LRCN, PHImageSequenceDataGenerator, PHImageSequenceIterator, LRCNVGG16
 from treelib import Tree, Node
 from collections import defaultdict
 import numpy as np
@@ -8,9 +8,9 @@ import numpy as np
 if __name__ == '__main__':
     parser = ArgumentParser("Transforms thumbnails folder into input sequences")
     parser.add_argument("input", type=str, default=None, help="path to folder containing labels folder")
-    parser.add_argument("-m", "--model", type=str, default=None, help="path to model checkpointr")
+    parser.add_argument("-m", "--model", type=str, default="lrcn", help="path to model checkpointr")
 
-    labels = ["Any","Sex","Oral","Outercourse","Noncourse"]
+    labels = ["Sex","Oral","Outercourse","Noncourse"]
     inv_labels_dict = defaultdict(lambda : set())
     labels_dict = defaultdict(lambda : set())
 
@@ -31,7 +31,6 @@ if __name__ == '__main__':
             inv_labels_dict[i].add(sub_node.tag)
 
     for name, id_set in labels_dict.items():
-        print(id_set)
         if len(id_set)>1:
             most_specific = list(id_set)[np.argmax(np.array([pos_hier.level(id) for id in id_set]))]
             for id in id_set:
@@ -46,6 +45,7 @@ if __name__ == '__main__':
 
     # (X, Y), (X_test, Y_test) = cifar10.load_data(dirname=".")
     # print(X.shape,Y.shape,X_test.shape,Y_test.shape)
+    print({l:i for i,l in enumerate(labels)})
 
     data_gen = PHImageSequenceDataGenerator()
     train_generator = data_gen.flow_from_directory(args.input,batch_size=64,train=True, labels_dict=labels_dict)
@@ -54,5 +54,10 @@ if __name__ == '__main__':
     n_classes = train_generator.n_labels
     batch_size = train_generator.batch_size
 
-    clf = LRCN(n_classes=n_classes,batch_size=batch_size)
+    if args.model=="lrcn":
+        clf = LRCN(n_classes=n_classes,batch_size=batch_size)
+    elif args.model=="lrcnvgg16":
+        clf = LRCNVGG16(n_classes=n_classes, batch_size=batch_size)
+    else:
+        raise("Model %s is not supported"%args.model)
     clf.fit_generator(train_generator=train_generator)

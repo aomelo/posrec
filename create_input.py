@@ -91,36 +91,40 @@ def clean_faulty_images(seq_img_paths):
 
 
 
-def load_sequences_with_paths(input):
-    labels = [f for f in listdir(input) if isdir(join(input, f))]
-    labels.remove("None")
-    labels.remove("full")
-    labels_dict = {l: i for i, l in enumerate(labels)}
+def load_sequences_with_paths(input, labels_dict=None):
+    dirs = [f for f in listdir(input) if isdir(join(input, f))]
+    dirs.remove("None")
+    dirs.remove("full")
+    if labels_dict is None:
+        labels_dict = {label:i for i,label in enumerate(dirs)}
+    else:
+        labels_dict = {k:v for k,v in labels_dict.items() if k in dirs}
     seq_labels = defaultdict(lambda: {})
     seq_feats = defaultdict(lambda: {})
-    for label in labels:
-        print("loading label "+label)
-        count = 0
-        for tn in listdir(join(input, label)):
-            if isfile(join(input, label, tn)):
-                pattern = "(.+)\-frame([0-9]+)(\.jpg)?"
-                m = re.search(pattern, tn)
-                if m and m.groups() and len(m.groups())>=2:
-                    id = m.group(1)
-                    frame = int(m.group(2))
-                    img_path = join(input, label, tn)
-                    #img = Image.open(img_path)
-                    seq_labels[id][frame] = labels_dict[label]
-                    seq_feats[id][frame] = img_path
-                    count += 1
-        print(str(count)+" images loaded")
+    for label in dirs:
+        if label in labels_dict:
+            print("loading directory %s with label %d"%(label,labels_dict[label]))
+            count = 0
+            for tn in listdir(join(input, label)):
+                if isfile(join(input, label, tn)):
+                    pattern = "(.+)\-frame([0-9]+)(\.jpg)?"
+                    m = re.search(pattern, tn)
+                    if m and m.groups() and len(m.groups())>=2:
+                        id = m.group(1)
+                        frame = int(m.group(2))
+                        img_path = join(input, label, tn)
+                        #img = Image.open(img_path)
+                        seq_labels[id][frame] = labels_dict[label]
+                        seq_feats[id][frame] = img_path
+                        count += 1
+            print(str(count)+" images loaded")
 
     instances = list(seq_labels.keys())
 
     seq_labels = [list(v.values()) for k, v in seq_labels.items()]
     seq_feats = [list(v.values()) for k, v in seq_feats.items()]
 
-    return seq_feats, seq_labels, instances, labels
+    return seq_feats, seq_labels, instances, dirs
 
 def load_sequences(input):
     labels = [f for f in listdir(input) if isdir(join(input, f))]

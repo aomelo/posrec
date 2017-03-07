@@ -9,8 +9,10 @@ from create_input import load_sequences_with_paths
 from numpy.random import choice
 from PIL import Image
 from keras.utils.np_utils import to_categorical
-
 import random
+from keras.applications.vgg16 import VGG16
+
+_VGG_16_WEIGHTS_URL = 'https://www.dropbox.com/s/u3w3ud3hlp11nwt/vgg16_weights.h5?dl=1'
 
 
 class PHImageDataGenerator(ImageDataGenerator):
@@ -91,6 +93,9 @@ class PHImageSequenceDataGenerator(object):
                                        seq_len=seq_len, train=train, labels_dict=labels_dict)
 
 
+
+
+
 class LRCN(object):
     def __init__(self, n_classes, seq_len=10, batch_size=64, n_epochs=100, optimizer="rmsprop", learning_rate=0.001):
         self.batch_size = batch_size
@@ -143,3 +148,19 @@ class LRCN(object):
 
     def predict(self, X):
         self.model.predict_proba(X)
+
+
+class LRCNVGG16(LRCN):
+    def create_model(self):
+        vgg_model = Sequential()
+        vgg_model.add(VGG16(weights='imagenet', include_top=False, input_shape=(90,160,3)))
+        vgg_model.add(Flatten())
+        self.model = Sequential()
+        self.model.add(TimeDistributed(vgg_model, input_shape=(self.seq_len,90,160,3)))
+        self.model.add(SimpleRNN(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
+        self.model.add(TimeDistributed(Dense(self.n_classes, activation='softmax')))
+
+        self.model.compile(loss='categorical_crossentropy',
+                           optimizer=self.optimizer,
+                           metrics=['accuracy'],
+                           learning_rate=self.learning_rate)
