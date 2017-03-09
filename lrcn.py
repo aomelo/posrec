@@ -1,32 +1,13 @@
 import numpy as np
-import random
 from keras.models import Sequential
 from keras.layers import LSTM, Recurrent, Activation, Dropout, MaxPooling2D, Convolution2D, Dense, Flatten
 from keras.layers.recurrent import SimpleRNN
 from keras.layers.wrappers import TimeDistributed
 from keras.preprocessing.image import ImageDataGenerator, Iterator, K
 from create_input import load_sequences_with_paths
-from numpy.random import choice
 from PIL import Image
-from keras.utils.np_utils import to_categorical
 import random
 from keras.applications.vgg16 import VGG16
-
-_VGG_16_WEIGHTS_URL = 'https://www.dropbox.com/s/u3w3ud3hlp11nwt/vgg16_weights.h5?dl=1'
-
-
-class PHImageDataGenerator(ImageDataGenerator):
-    def flow_from_directory(self, directory,
-                            target_size=(90, 160), color_mode='rgb',
-                            classes=None, class_mode='categorical',
-                            batch_size=32, shuffle=True, seed=88,
-                            save_to_dir=None,
-                            save_prefix='',
-                            save_format='jpeg',
-                            follow_links=False,
-                            seq_len=10, train=True
-                            ):
-        pass
 
 
 class PHImageSequenceIterator(Iterator):
@@ -36,19 +17,27 @@ class PHImageSequenceIterator(Iterator):
                  seq_len=10, train=True, test_size=0.2, labels_dict=None):
         self.seq_img_paths, self.seq_labels, instances, labels = load_sequences_with_paths(directory, labels_dict)
         idx_with_min_len = [i for i, seq in enumerate(self.seq_labels) if len(seq) >= seq_len]
+        print("%d out of %d sequences have length >= %d" % (len(idx_with_min_len), len(self.seq_labels), seq_len))
 
-        n_test_instances = int(test_size*len(idx_with_min_len))
+        n_test_instances = int(test_size * len(idx_with_min_len))
         n_train_instances = len(idx_with_min_len) - n_test_instances
-        train_test = [1]*n_train_instances + [0]*n_test_instances
+        train_test = [1] * n_train_instances + [0] * n_test_instances
         random.shuffle(train_test)
         if train:
-            idx_with_min_len = [idx_with_min_len[i] for i,v in enumerate(train_test) if v == 1]
+            idx_with_min_len = [idx_with_min_len[i] for i, v in enumerate(train_test) if v == 1]
         else:
-            idx_with_min_len = [idx_with_min_len[i] for i,v in enumerate(train_test) if v == 0]
+            idx_with_min_len = [idx_with_min_len[i] for i, v in enumerate(train_test) if v == 0]
 
         self.seq_img_paths = [self.seq_img_paths[i] for i in idx_with_min_len]
         self.seq_labels = [self.seq_labels[i] for i in idx_with_min_len]
         instances = [instances[i] for i in idx_with_min_len]
+
+        sample = [np.array(Image.open(paths[random.randint(0, len(paths) - 1)])) / 255.0 for paths in
+                  self.seq_img_paths]
+        sample = [img for img in sample if len(img.shape) == 3]
+        sample = np.array(sample)
+        print(sample.shape)
+        image_data_generator.fit(sample)
 
         n_instances = len(instances)
         self.n_labels = len(labels)
@@ -71,13 +60,13 @@ class PHImageSequenceIterator(Iterator):
             offset = random.randint(0, len(path_seq) - self.seq_len)
             for j, path in enumerate(path_seq[offset:offset + self.seq_len]):
                 img = np.array(Image.open(path))
-                #print(img.shape, batch_x[i, j].shape)
-                batch_x[i, j] = img/255.0
+                # print(img.shape, batch_x[i, j].shape)
+                batch_x[i, j] = img / 255.0
                 batch_y[i, j, label_seq[j + offset]] = 1
         return batch_x, batch_y
 
 
-class PHImageSequenceDataGenerator(object):
+class PHImageSequenceDataGenerator(ImageDataGenerator):
     def flow_from_directory(self, directory,
                             target_size=(90, 160), color_mode='rgb',
                             classes=None, class_mode='categorical',
@@ -91,9 +80,6 @@ class PHImageSequenceDataGenerator(object):
         return PHImageSequenceIterator(directory, self, target_size=target_size, color_mode=color_mode, classes=classes,
                                        class_mode=color_mode, batch_size=batch_size, shuffle=shuffle, seed=seed,
                                        seq_len=seq_len, train=train, labels_dict=labels_dict)
-
-
-
 
 
 class LRCN(object):
@@ -133,7 +119,7 @@ class LRCN(object):
                        nb_epoch=self.n_epochs,
                        shuffle=True)
 
-    def fit_generator(self, train_generator, validation_generator=None, samples_per_epoch=2000, nb_epoch=50,
+    def fit_generator(self, train_generator, validation_generator=None, samples_per_epoch=4096, nb_epoch=50,
                       nb_val_samples=400):
         self.create_model()
         self.model.fit_generator(
@@ -153,10 +139,10 @@ class LRCN(object):
 class LRCNVGG16(LRCN):
     def create_model(self):
         vgg_model = Sequential()
-        vgg_model.add(VGG16(weights='imagenet', include_top=False, input_shape=(90,160,3)))
+        vgg_model.add(VGG16(weights='imagenet', include_top=False, input_shape=(90, 160, 3)))
         vgg_model.add(Flatten())
         self.model = Sequential()
-        self.model.add(TimeDistributed(vgg_model, input_shape=(self.seq_len,90,160,3)))
+        self.model.add(TimeDistributed(vgg_model, input_shape=(self.seq_len, 90, 160, 3)))
         self.model.add(SimpleRNN(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
         self.model.add(TimeDistributed(Dense(self.n_classes, activation='softmax')))
 

@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
-from create_input import load_sequences, to_no_seq, pos_hier
-from lrcn import LRCN, PHImageSequenceDataGenerator, PHImageSequenceIterator, LRCNVGG16
-from treelib import Tree, Node
+from create_input import pos_hier
+from lrcn import LRCN, PHImageSequenceDataGenerator, LRCNVGG16
+from cnn import CNN, CNNVGG16, PHImageDataGenerator
 from collections import defaultdict
 import numpy as np
 
@@ -47,17 +47,36 @@ if __name__ == '__main__':
     # print(X.shape,Y.shape,X_test.shape,Y_test.shape)
     print({l:i for i,l in enumerate(labels)})
 
-    data_gen = PHImageSequenceDataGenerator()
-    train_generator = data_gen.flow_from_directory(args.input,batch_size=64,train=True, labels_dict=labels_dict)
-    test_generator = data_gen.flow_from_directory(args.input,batch_size=64,train=False, labels_dict=labels_dict)
-    #train_generator = PHImageSequenceDataGenerator(args.input,batch_size=128)
-    n_classes = train_generator.n_labels
-    batch_size = train_generator.batch_size
 
-    if args.model=="lrcn":
-        clf = LRCN(n_classes=n_classes,batch_size=batch_size)
-    elif args.model=="lrcnvgg16":
-        clf = LRCNVGG16(n_classes=n_classes, batch_size=batch_size)
+
+
+    if args.model.startswith("lrcn"):
+        data_gen = PHImageSequenceDataGenerator()
+        train_generator = data_gen.flow_from_directory(args.input, batch_size=64, train=True, labels_dict=labels_dict)
+        test_generator = data_gen.flow_from_directory(args.input, batch_size=64, train=False, labels_dict=labels_dict)
+        # train_generator = PHImageSequenceDataGenerator(args.input,batch_size=128)
+        n_classes = train_generator.n_labels
+        batch_size = train_generator.batch_size
+        if args.model=="lrcn":
+            clf = LRCN(n_classes=n_classes,batch_size=batch_size)
+        elif args.model=="lrcnvgg16":
+            clf = LRCNVGG16(n_classes=n_classes, batch_size=batch_size)
+        else:
+            raise ("Model %s is not supported" % args.model)
+    elif args.model.startswith("cnn"):
+        data_gen = PHImageDataGenerator()
+        train_generator = data_gen.flow_from_directory(args.input, batch_size=64, train=True, labels_dict=labels_dict)
+        test_generator = data_gen.flow_from_directory(args.input, batch_size=64, train=False, labels_dict=labels_dict)
+        # train_generator = PHImageSequenceDataGenerator(args.input,batch_size=128)
+        n_classes = train_generator.n_labels
+        batch_size = train_generator.batch_size
+        if args.model == "cnn":
+            clf = CNN(n_classes=n_classes, batch_size=batch_size)
+        elif args.model == "cnnvgg16":
+            clf = CNNVGG16(n_classes=n_classes, batch_size=batch_size)
+        else:
+            raise ("Model %s is not supported" % args.model)
     else:
-        raise("Model %s is not supported"%args.model)
+        raise ("Model %s is not supported" % args.model)
+
     clf.fit_generator(train_generator=train_generator)
