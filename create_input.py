@@ -48,6 +48,38 @@ pos_hier.create_node("Ass to Mouth",27,parent=5)
 
 
 
+def get_labels_dict(labels, pos_hier):
+    inv_labels_dict = defaultdict(lambda: set())
+    labels_dict = defaultdict(lambda: set())
+
+    labels_name_dict = {}
+    inv_labels_name_dict = {}
+
+    for node in pos_hier.all_nodes():
+        labels_name_dict[node.tag] = node.identifier
+        inv_labels_name_dict[node.identifier] = node.tag
+
+    for i, label in enumerate(labels):
+        node_id = labels_name_dict[label]
+        node = pos_hier.get_node(node_id)
+        labels_dict[node.tag].add(i)
+        inv_labels_dict[i].add(node.tag)
+        for sub_node in pos_hier.subtree(node_id).all_nodes():
+            labels_dict[sub_node.tag].add(i)
+            inv_labels_dict[i].add(sub_node.tag)
+
+    for name, id_set in labels_dict.items():
+        if len(id_set) > 1:
+            most_specific = list(id_set)[np.argmax(np.array([pos_hier.level(id) for id in id_set]))]
+            for id in id_set:
+                if id != most_specific:
+                    inv_labels_dict[id] = inv_labels_dict[id] - inv_labels_dict[most_specific]
+        else:
+            most_specific = list(id_set)[0]
+        labels_dict[name] = most_specific
+
+    return labels_dict, inv_labels_dict
+
 def to_no_seq(seq_feats, seq_labels, test_size=0.1):
     X, Y, X_test, Y_test = [], [], [], []
 
@@ -78,17 +110,6 @@ def load_sequences(input):
     seq_feats,seq_labels,labels,istances = load_sequences_with_paths(input)
     seq_feats = [[np.array(Image.open(path)) for path in seq] for seq in seq_feats]
     return seq_feats,seq_labels,labels,instances
-
-
-def clean_faulty_images(seq_img_paths):
-    for seq in seq_img_paths:
-        for path in seq:
-            img = Image.open(path)
-            width, height = img.size
-            if (width,height) != (160,90) or im.mode!="RGB":
-                print("delete %s mode %s"%(path,img.mode))
-                os.remove(path)
-
 
 
 def load_sequences_with_paths(input, labels_dict=None):

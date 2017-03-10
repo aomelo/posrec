@@ -1,6 +1,6 @@
 import numpy as np
-from keras.models import Sequential
-from keras.layers import LSTM, Recurrent, Activation, Dropout, MaxPooling2D, Convolution2D, Dense, Flatten
+from keras.models import Sequential, load_model, Model
+from keras.layers import LSTM, Recurrent, Activation, Dropout, MaxPooling2D, Convolution2D, Dense, Flatten, Input
 from keras.layers.recurrent import SimpleRNN
 from keras.layers.wrappers import TimeDistributed
 from keras.preprocessing.image import ImageDataGenerator, Iterator, K
@@ -16,6 +16,8 @@ class PHImageSequenceIterator(Iterator):
                  batch_size=32, shuffle=True, seed=88,
                  seq_len=10, train=True, test_size=0.2, labels_dict=None):
         self.seq_img_paths, self.seq_labels, instances, labels = load_sequences_with_paths(directory, labels_dict)
+        if labels_dict is not None:
+            labels = list(range(max(labels_dict.values())+1))
         idx_with_min_len = [i for i, seq in enumerate(self.seq_labels) if len(seq) >= seq_len]
         print("%d out of %d sequences have length >= %d" % (len(idx_with_min_len), len(self.seq_labels), seq_len))
 
@@ -83,7 +85,7 @@ class PHImageSequenceDataGenerator(ImageDataGenerator):
 
 
 class LRCN(object):
-    def __init__(self, n_classes, seq_len=10, batch_size=64, n_epochs=100, optimizer="rmsprop", learning_rate=0.001):
+    def __init__(self, n_classes, nb_filters=[128,96,64], seq_len=10, batch_size=64, n_epochs=100, optimizer="rmsprop", dropout=0.25, learning_rate=0.001, saved_model=None, activation="sigmoid"):
         self.batch_size = batch_size
         self.n_epochs = n_epochs
         self.optimizer = optimizer
@@ -91,29 +93,70 @@ class LRCN(object):
         self.model = None
         self.n_classes = n_classes
         self.seq_len = seq_len
+        self.saved_model = saved_model
+        self.nb_filters = nb_filters
+        self.activation = activation
+        self.dropout = dropout
+        self.create_model()
+
 
     def create_model(self):
-        self.model = Sequential()
-        self.model.add(TimeDistributed(Convolution2D(64, 3, 3), input_shape=(self.seq_len, 90, 160, 3)))
-        self.model.add(TimeDistributed(Activation('relu')))
-        self.model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
-        self.model.add(TimeDistributed(Dropout(0.25)))
-        self.model.add(TimeDistributed(Convolution2D(64, 3, 3)))
-        self.model.add(TimeDistributed(Activation('relu')))
-        self.model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
-        self.model.add(TimeDistributed(Dropout(0.25)))
-        self.model.add(TimeDistributed(Flatten()))
+        if self.saved_model is not None:
+            self.model = load_model(self.saved_model)
+        else:
+            input_cnn = Input(shape=(90, 160, 3))
+            input_seq = Input(shape=(self.seq_len, 90, 160, 3))
 
-        self.model.add(SimpleRNN(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
-        self.model.add(TimeDistributed(Dense(self.n_classes, activation='softmax')))
+            x = Convolution2D(self.nb_filters[0], 3, 3, border_mode="same")(input_cnn)
+            #x = Activation(self.activation)(x)
+            x = MaxPooling2D((2, 2))(x)
+            #if self.dropout > 0:
+            #    x = Dropout(self.dropout)(x)
+            for nb_filter in self.nb_filters[1:]:
+                x = Convolution2D(nb_filter, 3, 3, border_mode="same")(x)
+                #x = Activation(self.activation)(x)
+                x = MaxPooling2D((2, 2))(x)
+                #if self.dropout > 0:
+                #    x = Dropout(self.dropout)(x)
+            x = Flatten()(x)
 
-        self.model.compile(loss='categorical_crossentropy',
-                           optimizer=self.optimizer,
-                           metrics=['accuracy'],
-                           learning_rate=self.learning_rate)
+            cnn_model = Model(input=input_cnn,output=x)
+
+            self.model = Sequential()
+
+            self.model.add(TimeDistributed(cnn_model,input_shape=(self.seq_len, 90, 160, 3)))
+            self.model.add(SimpleRNN(self.n_classes, return_sequences=True, activation='softmax'))
+            #x = Dense(self.n_classes, activation='softmax')(x)
+
+
+            self.model.compile(loss='categorical_crossentropy',
+                               optimizer=self.optimizer,
+                               metrics=['accuracy', 'fmeasure', 'categorical_accuracy'],
+                               learning_rate=self.learning_rate)
+
+            self.model.summary()
+
+            # self.model = Sequential()
+            # self.model.add(TimeDistributed(Convolution2D(64, 3, 3), input_shape=(self.seq_len, 90, 160, 3)))
+            # self.model.add(TimeDistributed(Activation('relu')))
+            # self.model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
+            # self.model.add(TimeDistributed(Dropout(0.25)))
+            # self.model.add(TimeDistributed(Convolution2D(64, 3, 3)))
+            # self.model.add(TimeDistributed(Activation('relu')))
+            # self.model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
+            # self.model.add(TimeDistributed(Dropout(0.25)))
+            # self.model.add(TimeDistributed(Flatten()))
+            #
+            # self.model.add(SimpleRNN(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
+            # self.model.add(TimeDistributed(Dense(self.n_classes, activation='softmax')))
+            #
+            # self.model.compile(loss='categorical_crossentropy',
+            #                    optimizer=self.optimizer,
+            #                    metrics=['accuracy', 'fmeasure', 'categorical_accuracy'],
+            #                    learning_rate=self.learning_rate)
 
     def fit(self, X, Y):
-        self.create_model()
+
         self.model.fit(X, Y,
                        batch_size=self.batch_size,
                        nb_epoch=self.n_epochs,
@@ -138,15 +181,18 @@ class LRCN(object):
 
 class LRCNVGG16(LRCN):
     def create_model(self):
-        vgg_model = Sequential()
-        vgg_model.add(VGG16(weights='imagenet', include_top=False, input_shape=(90, 160, 3)))
-        vgg_model.add(Flatten())
-        self.model = Sequential()
-        self.model.add(TimeDistributed(vgg_model, input_shape=(self.seq_len, 90, 160, 3)))
-        self.model.add(SimpleRNN(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
-        self.model.add(TimeDistributed(Dense(self.n_classes, activation='softmax')))
+        if self.saved_model is not None:
+            self.model = load_model(self.saved_model)
+        else:
+            vgg_model = Sequential()
+            vgg_model.add(VGG16(weights='imagenet', include_top=False, input_shape=(90, 160, 3)))
+            vgg_model.add(Flatten())
+            self.model = Sequential()
+            self.model.add(TimeDistributed(vgg_model, input_shape=(self.seq_len, 90, 160, 3)))
+            self.model.add(SimpleRNN(32, return_sequences=True))  # returns a sequence of vectors of dimension 32
+            self.model.add(TimeDistributed(Dense(self.n_classes, activation='softmax')))
 
-        self.model.compile(loss='categorical_crossentropy',
-                           optimizer=self.optimizer,
-                           metrics=['accuracy'],
-                           learning_rate=self.learning_rate)
+            self.model.compile(loss='categorical_crossentropy',
+                               optimizer=self.optimizer,
+                               metrics=['accuracy', 'fmeasure', 'categorical_accuracy'],
+                               learning_rate=self.learning_rate)
